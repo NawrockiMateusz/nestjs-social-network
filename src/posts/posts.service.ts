@@ -3,7 +3,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { GetPostsFilterDto } from './dto/get-posts-filter.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Post } from './post.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 @Injectable()
 export class PostsService {
@@ -11,25 +11,21 @@ export class PostsService {
     @InjectRepository(Post)
     private postsRepository: Repository<Post>,
   ) {}
-  // getAllPosts() {
-  //   return this.posts;
-  // }
-  // getPostsWithFilters(filterDto: GetPostsFilterDto) {
-  //   const { search } = filterDto;
-  //   let posts = this.getAllPosts();
-  //   if (search) {
-  //     posts = posts.filter((post) => {
-  //       if (
-  //         post.title.toLocaleLowerCase().includes(search) ||
-  //         post.description.toLocaleLowerCase().includes(search)
-  //       ) {
-  //         return true;
-  //       }
-  //       return false;
-  //     });
-  //   }
-  //   return posts;
-  // }
+
+  async getPosts(filterDto: GetPostsFilterDto) {
+    const { search } = filterDto;
+    const query = this.postsRepository.createQueryBuilder('post');
+
+    if (search) {
+      query.andWhere(
+        'LOWER(post.title) LIKE LOWER(:search) OR LOWER(post.description) LIKE LOWER(:search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const posts = await query.getMany();
+    return posts;
+  }
 
   async getPostById(id: string) {
     const found = await this.postsRepository.findOne({ where: { id: id } });
@@ -41,25 +37,30 @@ export class PostsService {
     return found;
   }
 
-  // getPostById(id: string) {
-  //   return this.posts.find((post) => post.id === id);
-  // }
-  // createPost(createPostDto: CreatePostDto) {
-  //   const { title, description } = createPostDto;
-  //   const post: Post = {
-  //     id: uuid(),
-  //     title,
-  //     description,
-  //   };
-  //   this.posts.push(post);
-  //   return post;
-  // }
-  // deletePost(id: string) {
-  //   this.posts = this.posts.filter((task) => task.id !== id);
-  // }
-  // updatePostTitle(id: string, title: string) {
-  //   const post = this.getPostById(id);
-  //   post.title = title;
-  //   return post;
-  // }
+  async createPost(createPostDto: CreatePostDto) {
+    const { title, description } = createPostDto;
+
+    const task = this.postsRepository.create({
+      title,
+      description,
+    });
+
+    await this.postsRepository.save(task);
+    return task;
+  }
+
+  async deletePost(id: string) {
+    const result = await this.postsRepository.delete(id);
+
+    if (result.affected === 0) {
+      throw new NotFoundException(`Post with ID "${id} not found"`);
+    }
+  }
+
+  async updatePostTitle(id: string, title: string) {
+    const post = await this.getPostById(id);
+    post.title = title;
+    await this.postsRepository.save(post);
+    return post;
+  }
 }
