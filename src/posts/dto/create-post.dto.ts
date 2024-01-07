@@ -1,5 +1,4 @@
-export interface Post {
-  id: string;
+export class CreatePostDto {
   title: string;
   description: string;
 }
